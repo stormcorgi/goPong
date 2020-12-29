@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	_ "image/png"
 
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
@@ -10,10 +9,28 @@ import (
 	"golang.org/x/image/colornames"
 )
 
+// Pos is a Point.
+type Pos struct {
+	X float64
+	Y float64
+}
+
+type pixball struct {
+	Pos
+	V    pixel.Vec
+	Size float64
+}
+
+type bar struct {
+	Height  float64
+	X       float64
+	BottomY float64
+}
+
 var (
-	barHeight float64 = 100.0
-	ballSize  float64 = 10.0
-	myBarPos  float64
+	myBar bar
+	enBar bar
+	ball  pixball
 )
 
 func genBar(startX, Y float64) *imdraw.IMDraw {
@@ -26,44 +43,45 @@ func genBar(startX, Y float64) *imdraw.IMDraw {
 	return imd
 }
 
-func genBall(posX, posY *float64) *imdraw.IMDraw {
+func genBall(ball *pixball) *imdraw.IMDraw {
 	imd := imdraw.New(nil)
 	imd.Color = pixel.RGB(1, 1, 1)
-	imd.Push(pixel.V(*posX, *posY))
+	imd.Push(pixel.V(*ball.Pos.X, *ball.Pos.Y))
 	imd.Color = pixel.RGB(1, 1, 1)
-	imd.Push(pixel.V(*posX+ballSize, *posY+ballSize))
+	imd.Push(pixel.V(*ball.Pos.X+ball.Size, *ball.Pos.Y+ball.Size))
 	imd.Rectangle(0)
 	return imd
 }
 
-func moveBall(posX, posY *float64, vX, vY float64) {
-	*posX = *posX + vX
-	*posY = *posY + vY
+func moveBall(ball pixball) {
+	*ball.Pos.X = *ball.Pos.X + ball.V.X
+	*ball.Pos.Y = *ball.Pos.Y + ball.V.Y
 }
 
-func reflectBar(barPosX, barPosY, posX, posY, vX, vY float64) (float64, float64) {
+func reflectBar(b bar, ball pixball) (float64, float64) {
 	// x hit
-	if (barPosX < posX && posX < barPosX+ballSize) || (posX < barPosX && posX+ballSize < barPosX) {
+	if (b.X < ball.Pos.X && ball.Pos.X < b.X+ball.Size) || (ball.Pos.X < barball.Pos.X && ball.Pos.X+ball.Size < barball.Pos.X) {
 		// y hit
-		if barPosY < posY && posY < barPosY+barHeight {
+		if barball.Pos.Y < ball.Pos.Y && ball.Pos.Y < barball.Pos.Y+barHeight {
 			fmt.Println("X,Y hit!")
-			vX *= -1
-			// vY *= -1
+			ball.V.X *= -1
+			// ball.V.Y *= -1
 		}
 	}
-	return vX, vY
+	return ball.V.X, ball.V.Y
 }
 
 func isPointed(X, min, max float64) bool {
-	if X <= min+(ballSize/2) || max <= X+ballSize {
+	if X <= min+(ball.Size/2) || max <= X+ball.Size {
 		return true
 	}
 	return false
 }
 
 func run() {
+	// making window and configuration
 	cfg := pixelgl.WindowConfig{
-		Title:  "Pixels!",
+		Title:  "pong",
 		Bounds: pixel.R(0, 0, 500, 250),
 		VSync:  true,
 	}
@@ -72,52 +90,59 @@ func run() {
 		panic(err)
 	}
 
-	posX := win.Bounds().Center().X
-	posY := win.Bounds().Center().Y
-	vX := -3.0
-	vY := 3.0
+	// ball position X,Y / velocity ball.V.X,ball.V.Y
+	ball.Pos.X, ball.Pos.Y = win.Bounds().Center().X, win.Bounds().Center().Y
+	ball.V = pixel.V(-3.0, 3.0)
+	// ball.Pos.X := win.Bounds().Center().X
+	// ball.Pos.Y := win.Bounds().Center().Y
+	// ball.V.X := -3.0
+	// ball.V.Y := 3.0
+
+	// my bar
+	barHeight := 10.0
+	myBar.Height = barHeight
 
 	for !win.Closed() {
 		if win.Pressed(pixelgl.KeyUp) {
-			if !(myBarPos+barHeight > win.Bounds().Max.Y) {
-				myBarPos += 5
+			if !(myBar.BottomY+barHeight > win.Bounds().Max.Y) {
+				myBar.BottomY += 5
 			}
 		}
 		if win.Pressed(pixelgl.KeyDown) {
-			if !(myBarPos < win.Bounds().Min.Y) {
-				myBarPos -= 5
+			if !(myBar.BottomY < win.Bounds().Min.Y) {
+				myBar.BottomY -= 5
 			}
 		}
 
 		win.Clear(colornames.Black)
-		myBar := genBar(win.Bounds().Min.X+30, myBarPos)
+		myBar := genBar(win.Bounds().Min.X+30, myBar.BottomY)
 		myBar.Draw(win)
 
 		// enBar := genBar(win.Bounds().Max.X-20, win.Bounds().Max.Y/4)
 		// enBar.Draw(win)
 
-		if posX+ballSize+vX > win.Bounds().Max.X || posX+vX < win.Bounds().Min.X {
-			vX *= -1
+		if ball.Pos.X+ball.Size+ball.V.X > win.Bounds().Max.X || ball.Pos.X+ball.V.X < win.Bounds().Min.X {
+			ball.V.X *= -1
 		}
-		if posY+ballSize+vY > win.Bounds().Max.Y || posY+vY < win.Bounds().Min.Y {
-			vY *= -1
+		if ball.Pos.Y+ball.Size+ball.V.Y > win.Bounds().Max.Y || ball.Pos.Y+ball.V.Y < win.Bounds().Min.Y {
+			ball.V.Y *= -1
 		}
-		moveBall(&posX, &posY, vX, vY)
-		vX, vY = reflectBar(win.Bounds().Min.X+30, myBarPos, posX, posY, vX, vY)
+		moveBall(ball)
+		ball.V.X, ball.V.Y = reflectBar(win.Bounds().Min.X+30, myBar.BottomY, ball)
 
-		if isPointed(posX, win.Bounds().Min.X, win.Bounds().Max.X) {
-			if posX < win.Bounds().Center().X {
+		if isPointed(ball.Pos.X, win.Bounds().Min.X, win.Bounds().Max.X) {
+			if ball.Pos.X < win.Bounds().Center().X {
 				fmt.Println("right user point!")
 			} else {
 				fmt.Println("left user point!")
 			}
-			vX = -3.0
-			vY = 3.0
-			posX = win.Bounds().Center().X
-			posY = win.Bounds().Center().Y
+			ball.V.X = -3.0
+			ball.V.Y = 3.0
+			ball.Pos.X = win.Bounds().Center().X
+			ball.Pos.Y = win.Bounds().Center().Y
 		}
 
-		ball := genBall(&posX, &posY)
+		ball := genBall(&ball.Pos.X, &ball.Pos.Y)
 		ball.Draw(win)
 
 		win.Update()
